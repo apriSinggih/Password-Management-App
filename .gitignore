@@ -79,6 +79,9 @@ android/.gradle/
 android/.kotlin/
 **/.cxx/
 
+# Generated analysis output (graphify)
+/graphify-out/\n.graphify_*
+
 # OS files
 Thumbs.db
 desktop.ini

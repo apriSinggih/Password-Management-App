@@ -134,6 +134,20 @@ class VaultProvider extends ChangeNotifier {
     }
   }
 
+  Future<String?> importAll(List<Credential> credentials) async {
+    final key = _key;
+    if (key == null) return 'Brankas terkunci';
+    if (credentials.isEmpty) return null;
+
+    try {
+      await _repository.saveAll(credentials, key);
+      await load();
+      return null;
+    } catch (error) {
+      return 'Gagal mengimpor kredensial: $error';
+    }
+  }
+
   Future<String?> delete(String id) async {
     try {
       await _repository.delete(id);

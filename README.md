@@ -4,6 +4,17 @@ Password manager Android berbasis Flutter yang bekerja sepenuhnya offline. Semua
 
 > **Peringatan:** Master password tidak dapat dipulihkan. Jika lupa, seluruh data di brankas tidak dapat dibuka. Simpan master password dan file backup di tempat yang aman.
 
+## Download
+
+APK release terbaru dibangun otomatis oleh GitHub Actions dan tersedia di halaman [Releases](https://github.com/apriSinggih/Password-Management-App/releases).
+
+[![Download APK](https://img.shields.io/github/v/release/apriSinggih/Password-Management-App?label=Download%20APK&style=for-the-badge)](https://github.com/apriSinggih/Password-Management-App/releases/latest)
+
+- **Unduh langsung:** [SecureVault-latest.apk](https://github.com/apriSinggih/Password-Management-App/releases/latest/download/SecureVault-latest.apk)
+- **Semua versi:** [GitHub Releases](https://github.com/apriSinggih/Password-Management-App/releases)
+
+Setelah APK diunduh, buka file tersebut di perangkat Android dan izinkan instalasi dari sumber tidak dikenal jika diminta. Aplikasi tidak memerlukan akun atau koneksi internet.
+
 ## Fitur
 
 - Brankas kredensial dengan pencarian, kategori, tag, dan riwayat password
@@ -15,6 +26,7 @@ Password manager Android berbasis Flutter yang bekerja sepenuhnya offline. Semua
 - Generator password dengan pengaturan panjang, karakter, dan indikator kekuatan
 - Salin username/password/URL ke clipboard dengan pembersihan otomatis
 - Backup dan restore kredensial terenkripsi (`.svbackup`)
+- Impor massal kredensial dari file JSON teks biasa
 - Ganti master password dengan enkripsi ulang seluruh data
 - Proteksi screenshot dan recent-app preview dengan `FLAG_SECURE`
 - Backup otomatis Android dinonaktifkan (`allowBackup="false"`)
@@ -33,6 +45,36 @@ Password manager Android berbasis Flutter yang bekerja sepenuhnya offline. Semua
 - Verifier adalah teks uji terenkripsi untuk memvalidasi master password tanpa menyimpan password asli.
 - Database bukan SQLCipher. Yang dienkripsi adalah payload kredensial; kolom `id` dan `updated_at` tetap berupa metadata biasa.
 - Aplikasi tidak mengirim data ke internet dan tidak memiliki backend.
+
+## Impor dari File JSON
+
+Buka **Pengaturan → Data & Backup → Impor dari file JSON**, lalu pilih file `.json` (maksimal 5 MB). Format utama berupa array objek:
+
+```json
+[
+  {
+    "name": "Gmail",
+    "username": "user@gmail.com",
+    "password": "rahasia123",
+    "url": "https://mail.google.com",
+    "category": "Email",
+    "tags": ["pribadi", "kerja"],
+    "notes": "akun utama"
+  }
+]
+```
+
+Format lain yang diterima:
+
+- Objek pembungkus: `{ "credentials": [...] }`, `items`, `entries`, atau `data`
+- Satu objek kredensial di root
+- Alias field: `title`/`service`/`app` → name, `user`/`login`/`email`/`account` → username, `pass`/`secret` → password, `website`/`site`/`uri` → url, `folder`/`group` → category, `tag` → tags, `note`/`description` → notes
+- `tags` boleh berupa array atau string dipisah koma
+- Kategori yang tidak dikenal otomatis menjadi `Lainnya`
+- Entri tanpa `name`, `username`, maupun `url` dilewati
+- Entri dengan `name` + `username` yang sudah ada di brankas (atau duplikat di file yang sama) dilewati otomatis
+
+> File JSON berisi password dalam teks biasa. Data hasil impor langsung dienkripsi AES-256-GCM di brankas, tetapi file asli tetap berada di penyimpanan dan tidak dihapus otomatis.
 
 ## Teknologi
 
@@ -91,3 +133,41 @@ APK debug dihasilkan di:
 ```text
 build/app/outputs/flutter-apk/app-debug.apk
 ```
+
+## Rilis Otomatis ke GitHub
+
+Workflow `.github/workflows/release.yml` akan:
+
+1. Menjalankan `flutter analyze` dan `flutter test`.
+2. Membangun APK release.
+3. Menerbitkan GitHub Release berisi `SecureVault-<versi>.apk` dan `SecureVault-latest.apk`.
+
+Cara membuat rilis:
+
+- **Via tag:** sesuaikan `version` di `pubspec.yaml`, lalu jalankan:
+  ```bash
+  git tag v1.1.0
+  git push origin v1.1.0
+  ```
+- **Manual:** buka tab **Actions → Release APK → Run workflow** di GitHub. Workflow akan membuat tag dan release sesuai versi di `pubspec.yaml`.
+
+### Signing release (opsional, disarankan)
+
+Secara default workflow memakai debug key agar APK tetap bisa dipasang. Untuk rilis yang stabil dan bisa di-update tanpa uninstall, buat keystore release dan simpan sebagai GitHub Secrets:
+
+```bash
+keytool -genkeypair -v -keystore upload-keystore.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+base64 -w0 upload-keystore.jks
+```
+
+Tambahkan secrets berikut di **Settings → Secrets and variables → Actions**:
+
+| Secret | Isi |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | Hasil `base64 -w0 upload-keystore.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | Password keystore |
+| `ANDROID_KEY_ALIAS` | `upload` |
+| `ANDROID_KEY_PASSWORD` | Password key |
+
+Jangan commit file `.jks` atau `key.properties`; keduanya sudah diabaikan `.gitignore`. Konfigurasikan signing sebelum merilis versi pertama agar semua update berikutnya memakai tanda tangan yang sama.

@@ -80,6 +80,25 @@ class VaultRepository {
     );
   }
 
+  Future<void> saveAll(List<Credential> credentials, SecretKey key) async {
+    if (credentials.isEmpty) return;
+    final db = await _database;
+    final batch = db.batch();
+    for (final credential in credentials) {
+      final payload = await _crypto.encryptMap(credential.toJson(), key);
+      batch.insert(
+        'credentials',
+        <String, Object?>{
+          'id': credential.id,
+          'payload': payload,
+          'updated_at': credential.updatedAt.millisecondsSinceEpoch,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<void> delete(String id) async {
     final db = await _database;
     await db.delete('credentials', where: 'id = ?', whereArgs: <Object>[id]);

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +13,7 @@ import '../../../core/widgets/neobrutal.dart';
 import '../../../core/widgets/password_field.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../vault/providers/vault_provider.dart';
+import '../../vault/services/credential_json_importer.dart';
 import '../providers/settings_provider.dart';
 import '../services/backup_service.dart';
 
@@ -22,6 +25,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const int _maxJsonImportBytes = 5 * 1024 * 1024;
+
   bool _busy = false;
 
   void _message(String message) {
@@ -239,6 +244,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Future<void> _importJson() async {
+    final auth = context.read<AuthProvider>();
+    if (auth.key == null) {
+      _message('Brankas terkunci');
+      return;
+    }
+
+    PlatformFile? picked;
+    try {
+      picked = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: <String>['json'],
+      );
+    } catch (error) {
+      _message('Gagal memilih file: $error');
+      return;
+    }
+    final path = picked?.path;
+    if (path == null) return;
+
+    try {
+      final file = File(path);
+      if (await file.length() > _maxJsonImportBytes) {
+        if (!mounted) return;
+        _message('Ukuran file JSON maksimal 5 MB');
+        return;
+      }
+      final content = await file.readAsString();
+      if (!mounted) return;
+
+      final existingKeys = context
+          .read<VaultProvider>()
+          .credentials
+          .map(
+            (credential) =>
+                '${credential.name.trim().toLowerCase()}|'
+                '${credential.username.trim().toLowerCase()}',
+          )
+          .toSet();
+      final result = CredentialJsonImporter().parse(
+        content,
+        existingKeys: existingKeys,
+      );
+      if (!mounted) return;
+
+      if (result.credentials.isEmpty) {
+        final reason = result.warnings.isEmpty
+            ? ''
+            : ' (${result.warnings.first})';
+        _message('Tidak ada kredensial yang bisa diimpor$reason');
+        return;
+      }
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => _JsonImportPreviewDialog(result: result),
+      );
+      if (confirmed != true || !mounted) return;
+
+      final vaultProvider = context.read<VaultProvider>();
+      await _setBusy(() async {
+        final error = await vaultProvider.importAll(result.credentials);
+        if (!mounted) return;
+        _message(
+          error ??
+              '${result.credentials.length} kredensial berhasil diimpor, '
+                  '${result.skipped} dilewati',
+        );
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _message('Gagal mengimpor JSON: $error');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -344,6 +424,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     onTap: _busy ? null : _importBackup,
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.data_object),
+                    title: const Text('Impor dari file JSON'),
+                    subtitle: const Text(
+                      'Tambahkan banyak kredensial dari file JSON teks biasa',
+                    ),
+                    onTap: _busy ? null : _importJson,
+                  ),
                 ],
               ),
               _SettingsCard(
@@ -352,7 +440,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.shield_outlined),
                     title: const Text(AppConstants.appName),
-                    subtitle: const Text('Versi 1.0.0'),
+                    subtitle: const Text('Versi 1.1.0'),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -836,6 +924,123 @@ class _PasswordPromptDialogState extends State<_PasswordPromptDialog> {
           onPressed: () =>
               Navigator.of(context).pop(_controller.text),
           child: const Text('IMPOR'),
+        ),
+      ],
+    );
+  }
+}
+
+class _JsonImportPreviewDialog extends StatelessWidget {
+  const _JsonImportPreviewDialog({required this.result});
+
+  final JsonImportResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = NeoPalette.of(context);
+    final preview = result.credentials.take(5).toList();
+    final remainingSkipped = result.skipped - result.warnings.length;
+
+    return AlertDialog(
+      title: const Text('Impor dari file JSON'),
+      content: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                '${result.credentials.length} kredensial siap diimpor.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              if (result.skipped > 0) ...<Widget>[
+                const SizedBox(height: 4),
+                Text(
+                  '${result.skipped} entri dilewati.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: palette.textSecondary,
+                  ),
+                ),
+              ],
+              if (preview.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 14),
+                Text(
+                  'PRATINJAU',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: palette.textSecondary,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                for (final credential in preview)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Text(
+                      credential.username.isEmpty
+                          ? credential.name
+                          : '${credential.name} — ${credential.username}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                if (result.credentials.length > preview.length)
+                  Text(
+                    '...dan ${result.credentials.length - preview.length} '
+                    'lainnya',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: palette.textSecondary,
+                    ),
+                  ),
+              ],
+              if (result.warnings.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 14),
+                NeobrutalContainer(
+                  backgroundColor: palette.muted,
+                  padding: const EdgeInsets.all(12),
+                  shadowOffset: const Offset(2, 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      for (final warning in result.warnings)
+                        Text(
+                          '• $warning',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      if (remainingSkipped > 0)
+                        Text(
+                          '• ...dan $remainingSkipped entri lain dilewati',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Text(
+                'File JSON berisi password dalam teks biasa. Data yang diimpor '
+                'akan langsung dienkripsi di brankas. File asli tidak diubah '
+                'atau dihapus.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('BATAL'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text('IMPOR ${result.credentials.length}'),
         ),
       ],
     );
