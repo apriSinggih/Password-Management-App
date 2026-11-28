@@ -111,7 +111,7 @@ class _VaultHomeScreenState extends State<VaultHomeScreen> {
                 ),
               ),
               SizedBox(
-                height: 44,
+                height: 48,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -244,7 +244,7 @@ class _VaultHomeScreenState extends State<VaultHomeScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 14),
+        separatorBuilder: (_, _) => const SizedBox(height: 16),
         itemBuilder: (context, index) {
           final credential = items[index];
           return CredentialTile(

@@ -440,7 +440,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.shield_outlined),
                     title: const Text(AppConstants.appName),
-                    subtitle: const Text('Versi 1.1.0'),
+                    subtitle: const Text('Versi 1.1.1'),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
