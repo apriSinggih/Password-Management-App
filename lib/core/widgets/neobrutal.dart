@@ -173,7 +173,8 @@ class NeobrutalButton extends StatelessWidget {
         ? (backgroundColor ?? palette.yellow)
         : palette.muted;
     final foreground = enabled
-        ? (foregroundColor ?? Colors.black)
+        ? (foregroundColor ??
+              (background == palette.card ? palette.textPrimary : Colors.black))
         : palette.textSecondary;
 
     final child = Row(
@@ -246,15 +247,17 @@ class NeobrutalIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = NeoPalette.of(context);
     final enabled = onPressed != null;
+    final background = enabled
+        ? (backgroundColor ?? palette.card)
+        : palette.muted;
     final foreground = enabled
-        ? (foregroundColor ?? Colors.black)
+        ? (foregroundColor ??
+              (background == palette.card ? palette.textPrimary : Colors.black))
         : palette.textSecondary;
 
     final button = NeobrutalSurface(
       onTap: enabled ? onPressed : null,
-      backgroundColor: enabled
-          ? (backgroundColor ?? palette.card)
-          : palette.muted,
+      backgroundColor: background,
       borderColor: palette.border,
       shadowOffset: const Offset(3, 3),
       borderRadius: 8,
